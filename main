@@ -1,0 +1,151 @@
+%最近项目需要，所以一直在研究布谷鸟算法，在网上看了一些前辈的文章，原理讲的都比较透彻，我就不再赘述。
+%贴上一个自己注释的程序吧(这个程序也是借鉴别的大佬的，小小的做了一些修改)
+%我也是最近才接触布谷鸟算法，肯定有欠妥之处，希望各位大佬多多批评指正，相互学习~~
+ 
+
+function [bestnest,fmin]=cuckoo_search(n)
+if nargin<1,%【如果变量的个数小于1】
+% Number of nests (or different solutions)
+n=15;%【则把种群数量设为15，种群数量越多，最后算法的求解越精确，但程序的运行时间也会大大拉长】
+end
+% Discovery rate of alien eggs/solutions
+pa=0.25;%【布谷鸟蛋被发现的概率】
+%% Change this if you want to get better results
+% Tolerance
+Tol=1.0e-5;  %阈值【循环的精度设置】
+%% Simple bounds of the search domain
+nd=6; %【需要寻优的参数个数，即搜索空间维度为nd】
+% Lower bounds【鸟窝范围的下限】
+Lb=-100*ones(1,nd);
+% Upper bounds【鸟窝范围的上限】
+Ub=100*ones(1,nd);
+% Random initial solutions【把鸟窝的初始值设为随机值,即初始化所有鸟窝的位置】
+nest=zeros(n,nd);     %【nest为n行nd列的零矩阵，先把最初的鸟巢设为零矩阵】
+for i=1:n,%【这是个1~n的循环，把每个种群中的每个鸟窝初始化为随机数】
+nest(i,:)=Lb+(Ub-Lb).*rand(size(Lb));
+end
+% Get the current best【寻找当前最优的巢穴】
+fitness=10^10*ones(n,1);%【寻优域的范围设置】
+[fmin,bestnest,nest,fitness]=get_best_nest(nest,nest,fitness);
+N_iter=0;%【计数器初始化】
+%% Starting iterations【开始迭代】
+while (fmin>Tol),%【只要没达到这个精度，循环就会一直进行】
+    % Generate new solutions (but keep the current best)%【产生一个最优解，并保留原最优解】
+     new_nest=get_cuckoos(nest,bestnest,Lb,Ub);   %【寻找当前最优的巢穴】
+     [fnew,best,nest,fitness]=get_best_nest(nest,new_nest,fitness);%【找到最佳巢穴】
+    % Update the counter【计数器更新】
+      N_iter=N_iter+n; %【因为每次都要遍历所有巢穴，所以在这里每次迭代都要+n次，表示搜寻了这么多次】
+    % Discovery and randomization【布谷鸟蛋被发现，并通过莱维飞行(即随机游走)来替换这些被发现概率较大的劣质巢穴】 
+      new_nest=empty_nests(nest,Lb,Ub,pa) ;%【用莱维飞行更新其余鸟窝位置】
+    % Evaluate this set of solutions%【在更新后的鸟窝数据中再次找到最佳巢穴】
+      [fnew,best,nest,fitness]=get_best_nest(nest,new_nest,fitness);
+    % Update the counter again【计数器再次更新】
+      N_iter=N_iter+n;
+    % Find the best objective so far【找到当前的最优值】
+    if fnew<fmin,%【如果新鸟窝与目标鸟窝之间的的距离更近(即误差精度更小更准确)】
+        fmin=fnew;%【则用新的鸟窝的值替换原fmin中的数据】
+        bestnest=best;%【并且把此鸟窝下的各个参数的最优解赋给bestnest】
+    end
+disp(strcat('Total number of iterations=【当前已进行的迭代寻优次数】',num2str(N_iter)));
+fmin
+bestnest
+end %% End of iterations【结束布谷鸟寻优进程】
+ 
+%% Post-optimization processing
+%% Display all the nests【循环内外各写一遍就是为了看它不断迭代的过程以及最终结果】
+disp(strcat('Total number of iterations=【迭代寻优的总次数】',num2str(N_iter)));
+fmin
+bestnest
+figure;   %【出现最终n个曲线的图(n就是鸟窝个数)】
+plot(nest);
+xlabel '鸟巢的个数'      %【x轴的名称】
+ylabel '待定参数的估计值'     %【y轴的名称】
+ 
+ 
+%% --------------- All subfunctions are list below ------------------
+%% Get cuckoos by ramdom walk【用随机游走来加强布谷鸟算法】【莱维飞行】
+function nest=get_cuckoos(nest,best,Lb,Ub)
+% Levy flights【莱维飞行，是个固定程式，固定的给出随机数的公式模型，无须修改,了解即可】
+%【当然，如果要进行算法改进可以在这里做文章，比如用柯西来替代莱维飞行，就是基于柯西原理的改进的布谷鸟算法】
+%【莱维飞行本质上是一个基于马尔科夫链(下一状态取决于当前状态)的随机行走公式】
+%【莱维飞行可以使布谷鸟寻优综合局部寻优和全局寻优】
+n=size(nest,1);%【n是一个nest行1列的列向量】
+% Levy exponent and coefficient
+% For details, see equation (2.21), Page 16 (chapter 2) of the book
+% X. S. Yang, Nature-Inspired Metaheuristic Algorithms, 2nd Edition, Luniver Press, (2010).
+beta=3/2;
+sigma=(gamma(1+beta)*sin(pi*beta/2)/(gamma((1+beta)/2)*beta*2^((beta-1)/2)))^(1/beta);%【sigma这个数约等于0.7】
+for j=1:n,
+    s=nest(j,:);
+    % This is a simple way of implementing Levy flights
+    % For standard random walks, use step=1;
+    %% Levy flights by Mantegna's algorithm
+    %【randn函数是产生均值为0，方差σ^2 = 1，标准差σ = 1的正态分布的随机数或矩阵的函数。】
+    u=randn(size(s))*sigma;%【产生一个sigma倍的随机数行向量】
+    v=randn(size(s));%【产生一个随机数行向量】
+    step=u./abs(v).^(1/beta);%【矩阵之间进行元素上的点乘除运算】
+    % In the next equation, the difference factor (s-best) means that
+    % when the solution is the best solution, it remains unchanged.    
+    stepsize=0.01*step.*(s-best);%【依旧是数值运算】
+    % Here the factor 0.01 comes from the fact that L/100 should the typical
+    % step size of walks/flights where L is the typical lenghtscale;
+    % otherwise, Levy flights may become too aggresive/efficient,
+    % which makes new solutions (even) jump out side of the design domain
+    % (and thus wasting evaluations).
+    % Now the actual random walks or flights
+    s=s+stepsize.*randn(size(s));%【s又变了个数】
+   % Apply simple bounds/limits
+   nest(j,:)=simplebounds(s,Lb,Ub);%【获得交替比较上下限的值】
+end
+%% Find the current best nest【找到当前最佳巢穴】
+function [fmin,best,nest,fitness]=get_best_nest(nest,newnest,fitness)
+% Evaluating all new solutions【计算所有的新解】
+for j=1:size(nest,1),%【j从1循环到nest的行数】
+    fnew=fobj(newnest(j,:));%【在目标函数中进行运算 ，并把z的值赋值给fnew】
+    if fnew<=fitness(j),%【这个if语句用来判断是否满足精度，若更好则替换】
+       fitness(j)=fnew;
+       nest(j,:)=newnest(j,:);
+    end
+end
+% Find the current best
+[fmin,K]=min(fitness) ;%【fmin记录列向量fitness的每列的最小值，K记录每列最小值的行号】
+best=nest(K,:);%【获得当前最好的巢穴的值】
+%% Replace some nests by constructing new solutions/nests【通过构建新巢更换一些容易被发现的劣质巢】
+function new_nest=empty_nests(nest,Lb,Ub,pa)
+% A fraction of worse nests are discovered with a probability pa【劣质巢穴会以pa的概率被淘汰】
+n=size(nest,1);
+% Discovered or not -- a status vector【发现与否——状态向量】
+K=rand(size(nest))>pa;%【如果产生的随机数大于pa的值，就令K等于该值】
+% In the real world, if a cuckoo's egg is very similar to a host's eggs, then
+% this cuckoo's egg is less likely to be discovered, thus the fitness should
+% be related to the difference in solutions.  Therefore, it is a good idea
+% to do a random walk in a biased way with some random step sizes. 
+% New solution by biased/selective random walks【加入随机行走的新解集】
+stepsize=rand*(nest(randperm(n),:)-nest(randperm(n),:));
+%randperm会将数字顺序随机打乱，将1~n个整数随机打乱顺序再返回
+new_nest=nest+stepsize.*K;
+for j=1:size(new_nest,1)
+    s=new_nest(j,:);
+  new_nest(j,:)=simplebounds(s,Lb,Ub); 
+end
+% Application of simple constraints【简单约束的应用，这个函数是包含在莱维飞行中的】
+function s=simplebounds(s,Lb,Ub)%【这个函数就是交替比较上下限】
+  % Apply the lower bound【下限】
+  ns_tmp=s;%【赋值】
+  I=ns_tmp<Lb;%【先判断，若ns_tmp的值小于Lb，则把临时变量ns_tmp中存储的s的值赋给I】
+  ns_tmp(I)=Lb(I);
+ 
+  % Apply the upper bounds
+  J=ns_tmp>Ub;
+  ns_tmp(J)=Ub(J);
+  % Update this new move 【把s这个值更新】
+  s=ns_tmp;
+%% You can replace the following by your own functions【目标函数，这是最重要的，也是自己要替换的东西】
+% A d-dimensional objective function
+function z=fobj(u)
+%% d-dimensional sphere function sum_j=1^d (u_j-1)^2.
+%  with a minimum at (1,1, ...., 1);
+z=sum((u-4).^2);
+————————————————
+版权声明：本文为CSDN博主「依巴谷32349」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
+原文链接：https://blog.csdn.net/weixin_39931683/article/details/79893531
