@@ -146,6 +146,3 @@ function z=fobj(u)
 %% d-dimensional sphere function sum_j=1^d (u_j-1)^2.
 %  with a minimum at (1,1, ...., 1);
 z=sum((u-4).^2);
-————————————————
-版权声明：本文为CSDN博主「依巴谷32349」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
-原文链接：https://blog.csdn.net/weixin_39931683/article/details/79893531
